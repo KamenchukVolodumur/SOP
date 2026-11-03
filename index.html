@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SOP1: Operacje niskopoziomowe na plikach (I/O w POSIX)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111827;
+      --card-inner: #1a2234;
+      --card-border: #243048;
+      --card-border-hover: #3b82f6;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.12);
+      --highlight: #f59e0b;
+      --highlight-bg: rgba(245, 158, 11, 0.1);
+      --success: #10b981;
+      --success-bg: rgba(16, 185, 129, 0.1);
+      --danger: #ef4444;
+      --danger-bg: rgba(239, 68, 68, 0.1);
+      --code-bg: #070a10;
+      --code-border: #1e293b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text-main);
+      line-height: 1.65;
+      padding: 2.5rem 1rem 5rem 1rem;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      max-width: 1040px;
+      width: 100%;
+    }
+
+    /* Header */
+    header {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      margin-bottom: 2.5rem;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    }
+
+    header::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 5px;
+      background: linear-gradient(90deg, #38bdf8, #6366f1, #ec4899);
+    }
+
+    .badge-bar {
+      display: flex;
+      gap: 0.6rem;
+      align-items: center;
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      background: var(--accent-glow);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    .badge.course {
+      background: rgba(99, 102, 241, 0.15);
+      color: #818cf8;
+      border-color: rgba(99, 102, 241, 0.35);
+    }
+
+    .badge.live {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.35);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .badge.live::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #34d399;
+    }
+
+    h1 {
+      font-size: 2.3rem;
+      font-weight: 700;
+      margin-bottom: 0.65rem;
+      line-height: 1.2;
+      letter-spacing: -0.025em;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      max-width: 820px;
+    }
+
+    /* Sticky Navigation */
+    .toc-nav {
+      background: var(--card-inner);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      margin-top: 1.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1rem;
+      font-size: 0.88rem;
+    }
+
+    .toc-nav a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+
+    .toc-nav a:hover {
+      color: var(--accent);
+    }
+
+    /* Content Layout */
+    .content-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 2.25rem;
+    }
+
+    section {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 2rem;
+      scroll-margin-top: 1.5rem;
+    }
+
+    h2 {
+      font-size: 1.45rem;
+      color: #f8fafc;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 0.75rem;
+    }
+
+    h2 .num {
+      color: var(--accent);
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    h3 {
+      font-size: 1.15rem;
+      margin-top: 1.5rem;
+      margin-bottom: 0.65rem;
+      color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    p {
+      margin-bottom: 0.95rem;
+      color: #cbd5e1;
+    }
+
+    /* Code styling */
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.88em;
+      background: var(--code-bg);
+      color: #38bdf8;
+      padding: 0.15rem 0.45rem;
+      border-radius: 5px;
+      border: 1px solid var(--card-border);
+    }
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--code-border);
+      border-radius: 10px;
+      padding: 1.15rem 1.25rem;
+      overflow-x: auto;
+      margin: 1rem 0 1.25rem 0;
+    }
+
+    pre code {
+      background: transparent;
+      padding: 0;
+      border: none;
+      color: #e2e8f0;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+
+    /* Syntax Highlighting Fake Classes */
+    .c-kw { color: #f43f5e; font-weight: 600; }     /* if, while, return, int, ssize_t */
+    .c-fn { color: #38bdf8; font-weight: 600; }     /* open, read, write, close */
+    .c-fl { color: #fbbf24; font-weight: 600; }     /* O_RDONLY, O_CREAT */
+    .c-cm { color: #64748b; font-style: italic; }   /* // komentarze */
+    .c-st { color: #34d399; }                       /* "tekst" */
+    .c-nu { color: #a78bfa; }                       /* 0644, -1, 0 */
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.25rem 0;
+      font-size: 0.92rem;
+      background: var(--card-inner);
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--card-border);
+    }
+
+    th, td {
+      padding: 0.85rem 1.1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    th {
+      background: rgba(15, 23, 42, 0.7);
+      color: var(--accent);
+      font-weight: 600;
+      border-bottom: 2px solid var(--card-border);
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+    /* Callouts */
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-glow);
+      padding: 1.1rem 1.35rem;
+      border-radius: 0 10px 10px 0;
+      margin: 1.25rem 0;
+    }
+
+    .callout.warning {
+      border-left-color: var(--highlight);
+      background: var(--highlight-bg);
+    }
+
+    .callout.danger {
+      border-left-color: var(--danger);
+      background: var(--danger-bg);
+    }
+
+    .callout.success {
+      border-left-color: var(--success);
+      background: var(--success-bg);
+    }
+
+    .callout-title {
+      font-weight: 700;
+      margin-bottom: 0.4rem;
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      color: #f8fafc;
+      font-size: 0.98rem;
+    }
+
+    /* Grid cards */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.15rem;
+      margin: 1.25rem 0;
+    }
+
+    .card {
+      background: var(--card-inner);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .card:hover {
+      border-color: #3b82f6;
+    }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-flag-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      padding: 0.2rem 0.5rem;
+      background: rgba(56, 189, 248, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 4px;
+      color: #38bdf8;
+    }
+
+    .card p {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    /* Scenario Card */
+    .scenario-card {
+      background: var(--card-inner);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.4rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .scenario-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .scenario-header h4 {
+      font-size: 1.05rem;
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .scenario-desc {
+      font-size: 0.92rem;
+      color: var(--text-muted);
+      margin-bottom: 0.85rem;
+    }
+
+    ul, ol {
+      padding-left: 1.4rem;
+      margin-bottom: 1rem;
+      color: #cbd5e1;
+    }
+
+    li { margin-bottom: 0.45rem; }
+
+    footer {
+      text-align: center;
+      margin-top: 4rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--card-border);
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <div class="badge-bar">
+        <span class="badge course">SOP1 • Laboratorium 2</span>
+        <span class="badge">Politechnika Warszawska</span>
+        <span class="badge live">Pełny Konspekt</span>
+      </div>
+      <h1>Operacje niskopoziomowe na plikach (I/O w POSIX)</h1>
+      <p class="subtitle">
+        Kompletny przewodnik: deskryptory plików, wywołania systemowe <code>open</code>, <code>read</code>, <code>write</code>, <code>lseek</code>, rodzina <code>-at</code> oraz typowe scenariusze laboratoryjne w języku C.
+      </p>
+
+      <div class="toc-nav">
+        <strong>Spis treści:</strong>
+        <a href="#sec-diff">1. Niskopoziomowe vs Wysokopoziomowe</a> •
+        <a href="#sec-open">2. open() i Flagi</a> •
+        <a href="#sec-scenarios">3. Scenariusze Wywołania open()</a> •
+        <a href="#sec-readwrite">4. read() i write() (Brak buforowania)</a> •
+        <a href="#sec-lseek">5. Nawigacja z lseek()</a> •
+        <a href="#sec-at">6. Rodzina funkcji -at</a> •
+        <a href="#sec-errors">7. Kody Błędów (errno)</a> •
+        <a href="#sec-vector">8. I/O Wektorowe (readv / writev)</a> •
+        <a href="#sec-mmap">9. Mapowanie Pamięci (mmap)</a> •
+        <a href="#sec-nonblock">10. Tryb Nieblokujący (O_NONBLOCK)</a> •
+        <a href="#sec-multiplex">11. Multipleksowanie I/O (poll)</a> •
+        <a href="#sec-pollexample">12. Praktyka: poll() i /dev/input</a> •
+        <a href="#sec-fifo">13. Łącza Nazwane (FIFO)</a> •
+        <a href="#sec-pollpattern">14. Jak wypełniać pollfd i czytać dane</a>
+      </div>
+    </header>
+
+    <main class="content-grid">
+
+      <!-- 1. Różnica Niskopoziomowe vs Wysokopoziomowe -->
+      <section id="sec-diff">
+        <h2><span class="num">01.</span> Operacje Niskopoziomowe vs Wysokopoziomowe</h2>
+        <p>
+          W języku C do obsługi plików mamy dwie warstwy operacji: standardową bibliotekę C (wysoki poziom) oraz wywołania systemowe jądra POSIX (niski poziom).
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Cecha</th>
+              <th>Wysokopoziomowe (Standard C)</th>
+              <th>Niskopoziomowe (Wywołania POSIX / System Calls)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Identyfikator pliku</strong></td>
+              <td>Wskaźnik <code>FILE *</code> (struktura ze stanem i buforem)</td>
+              <td><strong>Deskryptor pliku <code>int fd</code></strong> (liczba całkowita)</td>
+            </tr>
+            <tr>
+              <td><strong>Nagłówki</strong></td>
+              <td><code>#include &lt;stdio.h&gt;</code></td>
+              <td><code>#include &lt;fcntl.h&gt;</code> oraz <code>#include &lt;unistd.h&gt;</code></td>
+            </tr>
+            <tr>
+              <td><strong>Funkcje</strong></td>
+              <td><code>fopen()</code>, <code>fread()</code>, <code>fwrite()</code>, <code>fclose()</code></td>
+              <td><code>open()</code>, <code>read()</code>, <code>write()</code>, <code>close()</code>, <code>lseek()</code></td>
+            </tr>
+            <tr>
+              <td><strong>Buforowanie</strong></td>
+              <td><strong>Tak</strong> (w przestrzeni użytkownika, redukuje liczbę syscalli)</td>
+              <td><strong>Brak buforowania!</strong> Bezpośrednie zapytania do jądra OS</td>
+            </tr>
+            <tr>
+              <td><strong>Zastosowanie</strong></td>
+              <td>Zwykłe pliki tekstowe i binarne na dysku</td>
+              <td><strong>Wszystko:</strong> pliki regularne, potoki (FIFO/pipe), sockety, urządzenia znakowe i blokowe (<code>/dev/*</code>)</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout">
+          <div class="callout-title">💡 Co to jest Deskryptor Pliku (fd)?</div>
+          Deskryptor to nieujemna liczba całkowita (<code>0, 1, 2, 3...</code>) będąca indeksem w tablicy otwartych plików danego procesu w jądrze. Domyślnie każdy proces startuje z trzema otwartymi deskryptorami:
+          <ul>
+            <li><code>0</code> (<code>STDIN_FILENO</code>) — standardowe wejście</li>
+            <li><code>1</code> (<code>STDOUT_FILENO</code>) — standardowe wyjście</li>
+            <li><code>2</code> (<code>STDERR_FILENO</code>) — standardowe wyjście błędów</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 2. open() i Flagi -->
+      <section id="sec-open">
+        <h2><span class="num">02.</span> Funkcja open() i Przewodnik po Flagach</h2>
+        <pre><code><span class="c-kw">int</span> <span class="c-fn">open</span>(<span class="c-kw">const char</span> *path, <span class="c-kw">int</span> oflag, ... <span class="c-cm">/* mode_t mode */</span>);
+<span class="c-kw">int</span> <span class="c-fn">close</span>(<span class="c-kw">int</span> fildes);</code></pre>
+
+        <p>
+          Parametr <code>oflag</code> konstruujemy za pomocą bitowego <strong>OR</strong> (<code>|</code>). 
+          <strong>Zasada żelazna:</strong> Musimy wybrać <u>dokładnie jeden</u> tryb dostępu, a następnie możemy dodać dowolną liczbę flag modyfikujących!
+        </p>
+
+        <h3>A. Tryby dostępu (Wybierz dokładnie jeden!)</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Flaga</th>
+              <th>Opis</th>
+              <th>Uwagi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>O_RDONLY</code></td>
+              <td>Tylko do odczytu (Read Only)</td>
+              <td>Próba wywołania <code>write()</code> zwróci błąd <code>[EBADF]</code>.</td>
+            </tr>
+            <tr>
+              <td><code>O_WRONLY</code></td>
+              <td>Tylko do zapisu (Write Only)</td>
+              <td>Próba wywołania <code>read()</code> zwróci błąd <code>[EBADF]</code>.</td>
+            </tr>
+            <tr>
+              <td><code>O_RDWR</code></td>
+              <td>Odczyt i zapis (Read & Write)</td>
+              <td>Umożliwia równoczesne czytanie i pisanie. <em>Nie stosować do FIFO!</em></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>B. Flagi modyfikujące zachowanie (Łączone przez <code>|</code>)</h3>
+        <div class="cards-grid">
+          <div class="card">
+            <div class="card-title">
+              <span>Tworzenie pliku</span>
+              <span class="card-flag-badge">O_CREAT</span>
+            </div>
+            <p>Jeśli plik nie istnieje, system go utworzy. <strong>Wymaga podania 3. argumentu <code>mode</code></strong> (uprawnienia, np. <code>0644</code>), które zostaną zmodyfikowane przez <code>umask</code> procesu.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>Atomowe sprawdzenie</span>
+              <span class="card-flag-badge">O_EXCL</span>
+            </div>
+            <p>Używane <strong>zawsze w parze z <code>O_CREAT</code></strong>. Jeśli plik już istnieje, <code>open()</code> zakończy się błędem <code>[EEXIST]</code>. Zapobiega wyścigom (race condition).</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>Czyszczenie zawartości</span>
+              <span class="card-flag-badge">O_TRUNC</span>
+            </div>
+            <p>Jeśli plik istnieje i otwarto go do zapisu (<code>O_WRONLY</code> lub <code>O_RDWR</code>), jego długość jest natychmiast obcinana do <strong>0 bajtów</strong> (stara zawartość jest niszczona).</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>Dopisywanie na koniec</span>
+              <span class="card-flag-badge">O_APPEND</span>
+            </div>
+            <p>Przed każdym wywołaniem <code>write()</code> wskaźnik pozycji w pliku jest automatycznie przestawiany na koniec. Idealne do logów.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>Tryb nieblokujący</span>
+              <span class="card-flag-badge">O_NONBLOCK</span>
+            </div>
+            <p>Wywołania <code>open</code>, <code>read</code>, <code>write</code> nie będą czekać. Zwracają natychmiast tyle bajtów, ile jest gotowych, lub błąd <code>[EAGAIN]</code>/<code>[EWOULDBLOCK]</code>.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>Bezpieczeństwo fork/exec</span>
+              <span class="card-flag-badge">O_CLOEXEC</span>
+            </div>
+            <p>Automatycznie zamyka ten deskryptor w procesie potomnym po wywołaniu funkcji z rodziny <code>exec()</code>.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. Praktyczne Scenariusze open() -->
+      <section id="sec-scenarios">
+        <h2><span class="num">03.</span> Praktyczne Scenariusze Użycia open() w C</h2>
+        <p>Oto gotowe szablony wywołań dla najczęstszych sytuacji laboratoryjnych i projektowych:</p>
+
+        <!-- Scenariusz 1 -->
+        <div class="scenario-card">
+          <div class="scenario-header">
+            <h4>📖 1. Tylko odczyt istniejącego pliku</h4>
+            <span class="card-flag-badge">O_RDONLY</span>
+          </div>
+          <div class="scenario-desc">
+            Otwieramy plik do czytania. Jeśli plik nie istnieje — funkcja zwróci <code>-1</code> i ustawi <code>errno = ENOENT</code>.
+          </div>
+          <pre><code><span class="c-kw">int</span> fd = <span class="c-fn">open</span>(<span class="c-st">"dane.txt"</span>, <span class="c-fl">O_RDONLY</span>);
+<span class="c-kw">if</span> (fd == -<span class="c-nu">1</span>) {
+    <span class="c-fn">perror</span>(<span class="c-st">"Błąd otwarcia do odczytu"</span>);
+    <span class="c-kw">return</span> <span class="c-nu">1</span>;
+}
+<span class="c-cm">// ... czytanie przez read(fd, ...) ...</span>
+<span class="c-fn">close</span>(fd);</code></pre>
+        </div>
+
+        <!-- Scenariusz 2 -->
+        <div class="scenario-card">
+          <div class="scenario-header">
+            <h4>✏️ 2. Zapis z nadpisaniem (Zastąpienie pliku / Wyczyszczenie)</h4>
+            <span class="card-flag-badge">O_WRONLY | O_CREAT | O_TRUNC</span>
+          </div>
+          <div class="scenario-desc">
+            Odpowiednik trybu <code>"w"</code> z <code>fopen</code> lub przekierowania <code>&gt;</code> w bashu. Jeśli plik istnieje — czyści go do 0 bajtów. Jeśli nie istnieje — tworzy nowy.
+          </div>
+          <pre><code><span class="c-kw">int</span> fd = <span class="c-fn">open</span>(<span class="c-st">"wynik.txt"</span>, <span class="c-fl">O_WRONLY</span> | <span class="c-fl">O_CREAT</span> | <span class="c-fl">O_TRUNC</span>, <span class="c-nu">0644</span>);
+<span class="c-kw">if</span> (fd == -<span class="c-nu">1</span>) {
+    <span class="c-fn">perror</span>(<span class="c-st">"Nie można otworzyć/utworzyć pliku do zapisu"</span>);
+    <span class="c-kw">return</span> <span class="c-nu">1</span>;
+}
+<span class="c-cm">// ... pisanie przez write(fd, ...) ...</span>
+<span class="c-fn">close</span>(fd);</code></pre>
+        </div>
+
+        <div class="callout danger">
+          <div class="callout-title">🚨 Klasyczna pułapka laboratoryjna: brak O_TRUNC!</div>
+          <p>
+            Co się stanie, jeśli otworzysz plik jako <code>open(path, O_WRONLY | O_CREAT, 0644)</code> <strong>bez flagi O_TRUNC</strong> dla istniejącego pliku?
+          </p>
+          <ul style="margin-bottom: 0;">
+            <li>Kursor ustawia się na <strong>bajt 0 (początek pliku)</strong>.</li>
+            <li>Stara zawartość pliku <strong>NIE JEST KASOWANA</strong>!</li>
+            <li>Funkcja <code>write()</code> zaczyna nadpisywać bajty od początku. Jeśli nowy tekst ma 20 znaków, a stary miał 100, pierwsze 20 znaków zostanie podmienionych, a pozostałe 80 zostanie nietknięte!</li>
+            <li>Jeśli kopiujesz plik sam w siebie lub o tej samej zawartości — na dysku nie zmieni się zupełnie nic!</li>
+          </ul>
+        </div>
+
+        <!-- Scenariusz 3 -->
+        <div class="scenario-card">
+          <div class="scenario-header">
+            <h4>➕ 3. Dopisywanie na koniec (Tryb Append / Logowanie)</h4>
+            <span class="card-flag-badge">O_WRONLY | O_CREAT | O_APPEND</span>
+          </div>
+          <div class="scenario-desc">
+            Odpowiednik trybu <code>"a"</code> z <code>fopen</code>. Nie niszczy dotychczasowych danych. Każdy kolejny <code>write()</code> ląduje na samym końcu pliku.
+          </div>
+          <pre><code><span class="c-kw">int</span> fd = <span class="c-fn">open</span>(<span class="c-st">"app.log"</span>, <span class="c-fl">O_WRONLY</span> | <span class="c-fl">O_CREAT</span> | <span class="c-fl">O_APPEND</span>, <span class="c-nu">0644</span>);
+<span class="c-kw">if</span> (fd == -<span class="c-nu">1</span>) {
+    <span class="c-fn">perror</span>(<span class="c-st">"Błąd otwarcia pliku logów"</span>);
+    <span class="c-kw">return</span> <span class="c-nu">1</span>;
+}
+<span class="c-cm">// Każdy write dopisze treść na końcu pliku</span>
+<span class="c-fn">close</span>(fd);</code></pre>
+        </div>
+
+        <!-- Scenariusz 4 -->
+        <div class="scenario-card">
+          <div class="scenario-header">
+            <h4>🛡️ 4. Atomowe tworzenie NOWEGO pliku (Gwarancja unikalności)</h4>
+            <span class="card-flag-badge">O_WRONLY | O_CREAT | O_EXCL</span>
+          </div>
+          <div class="scenario-desc">
+            Chcemy stworzyć plik <strong>tylko jeśli go jeszcze NIE MA</strong>. Jeśli plik już istnieje, wywołanie natychmiast zawiedzie z <code>errno = EEXIST</code>. Niezastąpione przy plikach blokad (lockfiles).
+          </div>
+          <pre><code><span class="c-kw">int</span> fd = <span class="c-fn">open</span>(<span class="c-st">"program.lock"</span>, <span class="c-fl">O_WRONLY</span> | <span class="c-fl">O_CREAT</span> | <span class="c-fl">O_EXCL</span>, <span class="c-nu">0600</span>);
+<span class="c-kw">if</span> (fd == -<span class="c-nu">1</span>) {
+    <span class="c-kw">if</span> (errno == <span class="c-fl">EEXIST</span>) {
+        <span class="c-fn">fprintf</span>(stderr, <span class="c-st">"Błąd: Plik już istnieje! Inna instancja programu działa.\n"</span>);
+    } <span class="c-kw">else</span> {
+        <span class="c-fn">perror</span>(<span class="c-st">"Błąd tworzenia lockfile"</span>);
+    }
+    <span class="c-kw">return</span> <span class="c-nu">1</span>;
+}
+<span class="c-fn">close</span>(fd);</code></pre>
+        </div>
+
+        <!-- Scenariusz 5 -->
+        <div class="scenario-card">
+          <div class="scenario-header">
+            <h4>🔄 5. Modyfikacja w miejscu (Odczyt i Zapis bez obcinania)</h4>
+            <span class="card-flag-badge">O_RDWR</span>
+          </div>
+          <div class="scenario-desc">
+            Otwieramy plik, aby czytać dane i w wybrane miejsca wpisywać poprawki (często łączone z <code>lseek</code>).
+          </div>
+          <pre><code><span class="c-kw">int</span> fd = <span class="c-fn">open</span>(<span class="c-st">"baza.bin"</span>, <span class="c-fl">O_RDWR</span>);
+<span class="c-kw">if</span> (fd == -<span class="c-nu">1</span>) {
+    <span class="c-fn">perror</span>(<span class="c-st">"Nie można otworzyć bazy w trybie RDWR"</span>);
+    <span class="c-kw">return</span> <span class="c-nu">1</span>;
+}
+<span class="c-cm">// Możemy zarówno czytać (read), jak i pisać (write) na tym samym fd</span>
+<span class="c-fn">close</span>(fd);</code></pre>
+        </div>
+      </section>
+
+      <!-- 4. read() i write() -->
+      <section id="sec-readwrite">
+        <h2><span class="num">04.</span> Odczyt i Zapis: read(), write() oraz Brak Buforowania</h2>
+        <pre><code><span class="c-kw">ssize_t</span> <span class="c-fn">read</span>(<span class="c-kw">int</span> fildes, <span class="c-kw">void</span> *buf, <span class="c-kw">size_t</span> nbyte);
+<span class="c-kw">ssize_t</span> <span class="c-fn">write</span>(<span class="c-kw">int</span> fildes, <span class="c-kw">const void</span> *buf, <span class="c-kw">size_t</span> nbyte);</code></pre>
+
+        <div class="callout warning">
+          <div class="callout-title">⚠️ Zjawisko Częściowego Odczytu/Zapisu (Partial Read/Write)</div>
+          Ponieważ operacje niskopoziomowe <strong>nie mają bufora</strong>, <code>read</code> i <code>write</code> zwracają natychmiast tyle bajtów, ile aktualnie jest dostępnych w systemie:
+          <ul style="margin-bottom: 0; margin-top: 0.5rem;">
+            <li>Wartość zwrócona <code>&gt; 0</code>: liczba bajtów, które <em>faktycznie</em> udało się przetworzyć (może być mniejsza niż <code>nbyte</code>!).</li>
+            <li>Wartość zwrócona <code>== 0</code> w <code>read()</code>: <strong>Koniec pliku (EOF)</strong>.</li>
+            <li>Wartość zwrócona <code>== -1</code>: Wystąpił błąd (kod w <code>errno</code>).</li>
+          </ul>
+        </div>
+
+        <h3>Wzorzec 1: Bezpieczna pętla odczytu pliku do końca (Kopiowanie na STDOUT)</h3>
+        <pre><code><span class="c-kw">#define</span> BUF_SIZE <span class="c-nu">1024</span>
+<span class="c-kw">char</span> buffer[BUF_SIZE];
+<span class="c-kw">ssize_t</span> bytes_read;
+
+<span class="c-kw">while</span> ((bytes_read = <span class="c-fn">read</span>(fd, buffer, BUF_SIZE)) > <span class="c-nu">0</span>) {
+    <span class="c-cm">// Uwaga: write również może zapisać mniej bajtów niż mu przekazano!</span>
+    <span class="c-kw">ssize_t</span> bytes_written = <span class="c-nu">0</span>;
+    <span class="c-kw">while</span> (bytes_written < bytes_read) {
+        <span class="c-kw">ssize_t</span> res = <span class="c-fn">write</span>(STDOUT_FILENO, buffer + bytes_written, bytes_read - bytes_written);
+        <span class="c-kw">if</span> (res == -<span class="c-nu">1</span>) {
+            <span class="c-kw">if</span> (errno == <span class="c-fl">EINTR</span>) <span class="c-kw">continue</span>; <span class="c-cm">// Przerwane przez sygnał -> ponów próbę</span>
+            <span class="c-fn">perror</span>(<span class="c-st">"Błąd zapisu"</span>);
+            <span class="c-kw">return</span> <span class="c-nu">1</span>;
+        }
+        bytes_written += res;
+    }
+}
+
+<span class="c-kw">if</span> (bytes_read == -<span class="c-nu">1</span>) {
+    <span class="c-fn">perror</span>(<span class="c-st">"Błąd odczytu"</span>);
+}</code></pre>
+      </section>
+
+      <!-- 5. lseek() -->
+      <section id="sec-lseek">
+        <h2><span class="num">05.</span> Swobodne Poruszanie Kursorem: lseek()</h2>
+        <pre><code><span class="c-kw">off_t</span> <span class="c-fn">lseek</span>(<span class="c-kw">int</span> fildes, <span class="c-kw">off_t</span> offset, <span class="c-kw">int</span> whence);</code></pre>
+        <p>
+          Domyślnie odczyt i zapis przesuwają się sekwencyjnie. Funkcja <code>lseek()</code> pozwala przestawić kursor pozycji (w plikach regularnych) w dowolne miejsce bez konieczności czytania wszystkiego po kolei.
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Wartość <code>whence</code></th>
+              <th>Punkt odniesienia</th>
+              <th>Przykład użycia</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>SEEK_SET</code></td>
+              <td>Początek pliku (bajt 0)</td>
+              <td><code>lseek(fd, 100, SEEK_SET);</code> — skok dokładnie na 100. bajt pliku.</td>
+            </tr>
+            <tr>
+              <td><code>SEEK_CUR</code></td>
+              <td>Aktualna pozycja kursora</td>
+              <td><code>lseek(fd, 50, SEEK_CUR);</code> — przesuń kursor o 50 bajtów w przód od obecnego miejsca.</td>
+            </tr>
+            <tr>
+              <td><code>SEEK_END</code></td>
+              <td>Koniec pliku</td>
+              <td><code>lseek(fd, -10, SEEK_END);</code> — cofnij kursor o 10 bajtów przed koniec pliku.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Laboratoyjne triki z lseek:</h3>
+        <div class="cards-grid">
+          <div class="card">
+            <div class="card-title">
+              <span>Pobranie bieżącej pozycji</span>
+              <span class="card-flag-badge">SEEK_CUR</span>
+            </div>
+            <p>Ponieważ <code>lseek</code> zwraca nową pozycję, przesunięcie o 0 od pozycji bieżącej zwraca aktualny offset:</p>
+            <pre><code><span class="c-kw">off_t</span> current_pos = <span class="c-fn">lseek</span>(fd, <span class="c-nu">0</span>, <span class="c-fl">SEEK_CUR</span>);</code></pre>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>Sprawdzenie rozmiaru pliku</span>
+              <span class="card-flag-badge">SEEK_END</span>
+            </div>
+            <p>Skok na koniec pliku zwraca jego łączną wielkość w bajtach:</p>
+            <pre><code><span class="c-kw">off_t</span> file_size = <span class="c-fn">lseek</span>(fd, <span class="c-nu">0</span>, <span class="c-fl">SEEK_END</span>);
+<span class="c-fn">lseek</span>(fd, <span class="c-nu">0</span>, <span class="c-fl">SEEK_SET</span>); <span class="c-cm">// Powrót na początek!</span></code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. Rodzina funkcji -at -->
+      <section id="sec-at">
+        <h2><span class="num">06.</span> Rodzina Funkcji z Końcówką -at (*at)</h2>
+        <pre><code><span class="c-kw">int</span> <span class="c-fn">openat</span>(<span class="c-kw">int</span> dirfd, <span class="c-kw">const char</span> *path, <span class="c-kw">int</span> oflag, ...);
+<span class="c-kw">int</span> <span class="c-fn">fstatat</span>(<span class="c-kw">int</span> dirfd, <span class="c-kw">const char</span> *path, <span class="c-kw">struct</span> stat *buf, <span class="c-kw">int</span> flag);
+<span class="c-kw">int</span> <span class="c-fn">unlinkat</span>(<span class="c-kw">int</span> dirfd, <span class="c-kw">const char</span> *path, <span class="c-kw">int</span> flag);</code></pre>
+
+        <p>
+          Funkcje z końcówką <code>-at</code> rozwiązują 3 kluczowe problemy programisty systemowego:
+        </p>
+
+        <ol>
+          <li>
+            <strong>Brak konieczności sklejania długich ścieżek:</strong> Otwieramy katalog raz (mamy jego <code>dirfd</code>), a potem otwieramy pliki wewnątrz podając jedynie ich krótkie nazwy.
+          </li>
+          <li>
+            <strong>Wielowątkowość (Thread Safety):</strong> Funkcja <code>chdir()</code> zmienia bieżący katalog <u>dla całego procesu</u> i psuje ścieżki w innych wątkach. Przy <code>*at</code> każdy wątek może mieć swój własny <code>dirfd</code> bez dotykania globalnego CWD!
+          </li>
+          <li>
+            <strong>Ochrona przed wyścigami (TOCTOU):</strong> Zabezpiecza przed podmianą katalogu (np. symlinkiem) w trakcie działania programu.
+          </li>
+        </ol>
+
+        <div class="callout success">
+          <div class="callout-title">Magiczne Makro AT_FDCWD</div>
+          Jeśli jako pierwszy parametr <code>dirfd</code> podasz <code>AT_FDCWD</code>, funkcja zinterpretuje ścieżkę względną od bieżącego katalogu roboczego (CWD).<br>
+          Oznacza to, że: <code>openat(AT_FDCWD, "plik.txt", O_RDONLY)</code> zachowuje się <strong>dokładnie tak samo</strong> jak <code>open("plik.txt", O_RDONLY)</code>.
+        </div>
+      </section>
+
+      <!-- 7. Kody Błędów -->
+      <section id="sec-errors">
+        <h2><span class="num">07.</span> Ściągawka: Kody Błędów (errno)</h2>
+        <p>Wszystkie powyższe funkcje w razie awarii zwracają <code>-1</code> i ustawiają zmienną <code>errno</code> (z nagłówka <code>&lt;errno.h&gt;</code>):</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Kod błędu</th>
+              <th>Znaczenie</th>
+              <th>Typowa przyczyna na labach</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>ENOENT</code></td>
+              <td>No such file or directory</td>
+              <td>Plik nie istnieje, a zapomniano podać <code>O_CREAT</code>, lub błędna ścieżka.</td>
+            </tr>
+            <tr>
+              <td><code>EACCES</code></td>
+              <td>Permission denied</td>
+              <td>Brak uprawnień do odczytu/zapisu lub brak prawa <code>+x</code> na katalogu nadrzędnym.</td>
+            </tr>
+            <tr>
+              <td><code>EEXIST</code></td>
+              <td>File exists</td>
+              <td>Podano <code>O_CREAT | O_EXCL</code>, a plik już jest na dysku.</td>
+            </tr>
+            <tr>
+              <td><code>EISDIR</code></td>
+              <td>Is a directory</td>
+              <td>Próba otwarcia katalogu w trybie zapisu (<code>O_WRONLY</code> lub <code>O_RDWR</code>).</td>
+            </tr>
+            <tr>
+              <td><code>EMFILE</code></td>
+              <td>Too many open files (Process limit)</td>
+              <td>Proces wyczerpał limit otwartych deskryptorów (zapomniano wywoływać <code>close()</code> w pętli!).</td>
+            </tr>
+            <tr>
+              <td><code>ENFILE</code></td>
+              <td>Too many open files in system</td>
+              <td>Globalny limit całego systemu operacyjnego został osiągnięty.</td>
+            </tr>
+            <tr>
+              <td><code>EINTR</code></td>
+              <td>Interrupted function call</td>
+              <td>Wywołanie <code>read</code>/<code>write</code>/<code>open</code> zostało przerwane nadejściem sygnału. Zazwyczaj należy ponowić próbę.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- 8. I/O Wektorowe: readv i writev -->
+      <section id="sec-vector">
+        <h2><span class="num">08.</span> Wektorowe Wejście/Wyjście: readv() i writev() (Scatter / Gather I/O)</h2>
+        <p>
+          Wymagany nagłówek: <code>#include &lt;sys/uio.h&gt;</code>. Służy do odczytu lub zapisu danych z/do <strong>wielu różnych buforów o różnych rozmiarach za jednym wywołaniem systemowym</strong>.
+        </p>
+
+        <pre><code><span class="c-kw">struct</span> iovec {
+    <span class="c-kw">void</span>   *iov_base; <span class="c-cm">/* Wskaźnik na początek bufora w pamięci RAM */</span>
+    <span class="c-kw">size_t</span>  iov_len;  <span class="c-cm">/* Dokładny rozmiar tego konkretnego bufora w bajtach */</span>
+};
+
+<span class="c-kw">ssize_t</span> <span class="c-fn">readv</span>(<span class="c-kw">int</span> fildes, <span class="c-kw">const struct</span> iovec *iov, <span class="c-kw">int</span> iovcnt);
+<span class="c-kw">ssize_t</span> <span class="c-fn">writev</span>(<span class="c-kw">int</span> fildes, <span class="c-kw">const struct</span> iovec *iov, <span class="c-kw">int</span> iovcnt);</code></pre>
+
+        <div class="callout success">
+          <div class="callout-title">💡 Czy każdy bufor ma swój własny rozmiar?</div>
+          <strong>TAK!</strong> Każdy element w tablicy <code>iov</code> opisuje zupełnie niezależny bufor:
+          <ul>
+            <li><code>iov[0]</code> może mieć 16 bajtów (np. nagłówek pakietu).</li>
+            <li><code>iov[1]</code> może mieć 1024 bajty (np. treść wiadomości).</li>
+            <li><code>iov[2]</code> może mieć 4 bajty (np. suma kontrolna / CRC).</li>
+          </ul>
+        </div>
+
+        <h3>Jak to działa w praktyce?</h3>
+        <ul>
+          <li>
+            <strong>writev (Gather write — "Zbieranie"):</strong> Jądro zbiera dane z buforów <code>iov[0]</code>, potem <code>iov[1]</code>, aż do <code>iov[iovcnt-1]</code> i zapisuje je jeden po drugim do pliku w <strong>jednej atomowej operacji</strong>. Nie musisz alokować wielkiego bufora i robić <code>memcpy</code>!
+          </li>
+          <li>
+            <strong>readv (Scatter read — "Rozpraszanie"):</strong> Jądro czyta dane z pliku i po kolei napełnia bufory: najpierw do pełna napełnia <code>iov[0]</code> (aż do <code>iov[0].iov_len</code>), potem nadmiar przelewa do <code>iov[1]</code> itd.
+          </li>
+        </ul>
+
+        <h3>Przykład w języku C (Zapis nagłówka i treści wiadomości):</h3>
+        <pre><code><span class="c-kw">#include</span> <span class="c-st">&lt;sys/uio.h&gt;</span>
+<span class="c-kw">#include</span> <span class="c-st">&lt;fcntl.h&gt;</span>
+<span class="c-kw">#include</span> <span class="c-st">&lt;string.h&gt;</span>
+
+<span class="c-kw">char</span> header[] = <span class="c-st">"HEADER:"</span>;          <span class="c-cm">// Bufor 1 (rozmiar 7 bajtów)</span>
+<span class="c-kw">char</span> payload[] = <span class="c-st">"Tresc wiadomosci\n"</span>; <span class="c-cm">// Bufor 2 (rozmiar 17 bajtów)</span>
+
+<span class="c-kw">struct</span> iovec iov[<span class="c-nu">2</span>];
+
+<span class="c-cm">// Konfiguracja pierwszego pojemnika:</span>
+iov[<span class="c-nu">0</span>].iov_base = header;
+iov[<span class="c-nu">0</span>].iov_len = <span class="c-fn">strlen</span>(header);
+
+<span class="c-cm">// Konfiguracja drugiego pojemnika o INNYM rozmiarze:</span>
+iov[<span class="c-nu">1</span>].iov_base = payload;
+iov[<span class="c-nu">1</span>].iov_len = <span class="c-fn">strlen</span>(payload);
+
+<span class="c-cm">// Zapis obu buforów naraz za JEDNYM wywołaniem systemowym:</span>
+<span class="c-kw">ssize_t</span> written = <span class="c-fn">writev</span>(fd, iov, <span class="c-nu">2</span>);
+<span class="c-kw">if</span> (written == -<span class="c-nu">1</span>) {
+    ERR(<span class="c-st">"writev"</span>);
+}</code></pre>
+      </section>
+
+      <!-- 9. mmap -->
+      <section id="sec-mmap">
+        <h2><span class="num">09.</span> Mapowanie Plików do Pamięci: mmap()</h2>
+        <p>
+          Nagłówki: <code>#include &lt;sys/mman.h&gt;</code> oraz <code>#include &lt;sys/stat.h&gt;</code>.<br>
+          <strong>Koncepcja:</strong> Zamiast bawić się w pętle z <code>read()</code>, <code>write()</code> i <code>lseek()</code>, prosimy jądro o <strong>zrzutowanie pliku wprost do wirtualnej pamięci RAM procesu</strong>. Otrzymujemy zwykły wskaźnik <code>char *buff</code> i pracujemy z plikiem <u>dokładnie tak, jak ze zwykłą tablicą w C</u>!
+        </p>
+
+        <pre><code><span class="c-kw">void</span> *<span class="c-fn">mmap</span>(<span class="c-kw">void</span> *addr, <span class="c-kw">size_t</span> length, <span class="c-kw">int</span> prot, <span class="c-kw">int</span> flags, <span class="c-kw">int</span> fd, <span class="c-kw">off_t</span> offset);</code></pre>
+
+        <h3>Rozłożenie parametrów na czynniki pierwsze:</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Parametr</th>
+              <th>Typowa wartość w SOP</th>
+              <th>Co oznacza?</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>addr</code></td>
+              <td><code>NULL</code></td>
+              <td>Prosimy jądro, aby samo wybrało dogodny adres w pamięci RAM.</td>
+            </tr>
+            <tr>
+              <td><code>length</code></td>
+              <td><code>sb.st_size</code></td>
+              <td>Ile bajtów pliku mapujemy (zazwyczaj pobierane przez <code>fstat(fd, &amp;sb)</code>).</td>
+            </tr>
+            <tr>
+              <td><code>prot</code></td>
+              <td><code>PROT_READ | PROT_WRITE</code></td>
+              <td>Uprawnienia do pamięci: czytanie (<code>PROT_READ</code>), modyfikacja (<code>PROT_WRITE</code>), wykonywanie kodu (<code>PROT_EXEC</code>).</td>
+            </tr>
+            <tr>
+              <td><code>flags</code></td>
+              <td><code>MAP_SHARED</code></td>
+              <td>
+                <code>MAP_SHARED</code>: zmiany w pamięci są <strong>zapisywane fizycznie do pliku</strong> na dysku.<br>
+                <code>MAP_PRIVATE</code>: tworzy kopię (Copy-on-Write) — zmiany są widoczne tylko dla nas i NIE wpływają na plik!
+              </td>
+            </tr>
+            <tr>
+              <td><code>fd</code></td>
+              <td><code>fd</code></td>
+              <td>Deskryptor otwartego wcześniej pliku (np. przez <code>open("plik", O_RDWR)</code>).</td>
+            </tr>
+            <tr>
+              <td><code>offset</code></td>
+              <td><code>0</code></td>
+              <td>Od którego bajtu pliku zaczynamy mapowanie (musi być wielokrotnością rozmiaru strony pamięci, zazwyczaj 0).</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout warning">
+          <div class="callout-title">⚠️ Pułapka laboratoryjna: Jak sprawdzać błąd mmap?</div>
+          Większość funkcji zwracających wskaźnik przy błędzie zwraca <code>NULL</code>. <strong>ALE NIE mmap!</strong><br>
+          W razie błędu <code>mmap</code> zwraca specjalną stałą: <strong><code>MAP_FAILED</code></strong> (czyli <code>(void *)-1</code>).
+          <pre style="margin-top: 0.5rem;"><code><span class="c-kw">char</span> *buff = <span class="c-fn">mmap</span>(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, <span class="c-nu">0</span>);
+<span class="c-kw">if</span> (buff == <span class="c-fl">MAP_FAILED</span>) {  <span class="c-cm">// ZAWSZE sprawdzaj MAP_FAILED, NIGDY NULL!</span>
+    ERR(<span class="c-st">"mmap"</span>);
+}</code></pre>
+        </div>
+
+        <h3>Trzy niezbędne kroki towarzyszące:</h3>
+        <div class="cards-grid">
+          <div class="card">
+            <div class="card-title">
+              <span>1. Rozmiar: fstat()</span>
+              <span class="card-flag-badge">st_size</span>
+            </div>
+            <p>Aby wiedzieć, ile pamięci zmapować, pytamy system o rozmiar pliku przez <code>fstat(fd, &amp;sb)</code>, po czym bierzemy <code>sb.st_size</code>.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>2. Zapis na dysk: msync()</span>
+              <span class="card-flag-badge">MS_SYNC</span>
+            </div>
+            <p>Zapis do tablicy <code>buff[i] = 'Z'</code> modyfikuje tylko pamięć RAM. Aby wymusić fizyczny zrzut zmian na dysk natychmiast, wołamy: <code>msync(buff, length, MS_SYNC);</code>.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>3. Sprzątanie: munmap()</span>
+              <span class="card-flag-badge">munmap</span>
+            </div>
+            <p>Po zakończeniu pracy zwalniamy zmapowany obszar: <code>munmap(buff, length);</code> i zamykamy deskryptor <code>close(fd);</code>.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 10. Tryb Nieblokujący: O_NONBLOCK -->
+      <section id="sec-nonblock">
+        <h2><span class="num">10.</span> Tryb Blokujący vs Nieblokujący (O_NONBLOCK i fcntl)</h2>
+        <p>
+          W systemach POSIX panuje zasada <strong>„Wszystko jest plikiem”</strong> — nie tylko pliki na dysku, ale też terminal (klawiatura/ekran), potoki (pipe/FIFO) oraz połączenia sieciowe (sockety).
+        </p>
+
+        <div class="cards-grid">
+          <div class="card">
+            <div class="card-title">
+              <span>Tryb Blokujący (Domyślny)</span>
+              <span class="card-flag-badge">Domyślny</span>
+            </div>
+            <p>
+              Gdy wołasz <code>read()</code> lub <code>getchar()</code> z klawiatury, a użytkownik nic nie wpisał — <strong>program zasypia i wisi w nieskończoność</strong>, czekając na klawisz Enter. Nie wykonuje wtedy żadnych innych instrukcji.
+            </p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>Tryb Nieblokujący (O_NONBLOCK)</span>
+              <span class="card-flag-badge">O_NONBLOCK</span>
+            </div>
+            <p>
+              Gdy wołasz <code>read()</code>, a danych akurat nie ma — <strong>funkcja NIE czeka ani milisekundy!</strong> Natychmiast zwraca <code>-1</code> i ustawia <code>errno = EAGAIN</code> (lub <code>EWOULDBLOCK</code>). Program działa dalej bez zatrzymywania.
+            </p>
+          </div>
+        </div>
+
+        <h3>Jak włączyć O_NONBLOCK dla już otwartego deskryptora (np. STDIN)?</h3>
+        <p>
+          Deskryptor standardowego wejścia (<code>0</code> / <code>STDIN_FILENO</code>) otwiera system przed startem <code>main()</code>. Nie możemy go otworzyć przez <code>open()</code>, dlatego flagę zmieniamy funkcją <code>fcntl()</code>:
+        </p>
+
+        <pre><code><span class="c-kw">#include</span> <span class="c-st">&lt;fcntl.h&gt;</span>
+<span class="c-kw">#include</span> <span class="c-st">&lt;errno.h&gt;</span>
+<span class="c-kw">#include</span> <span class="c-st">&lt;unistd.h&gt;</span>
+
+<span class="c-cm">// 1. Pobierz aktualne flagi deskryptora STDIN:</span>
+<span class="c-kw">int</span> flags = <span class="c-fn">fcntl</span>(STDIN_FILENO, F_GETFL);
+<span class="c-kw">if</span> (flags == -<span class="c-nu">1</span>) ERR(<span class="c-st">"fcntl F_GETFL"</span>);
+
+<span class="c-cm">// 2. Dodaj flagę O_NONBLOCK do istniejących flag:</span>
+<span class="c-kw">if</span> (<span class="c-fn">fcntl</span>(STDIN_FILENO, F_SETFL, flags | <span class="c-fl">O_NONBLOCK</span>) == -<span class="c-nu">1</span>)
+    ERR(<span class="c-st">"fcntl F_SETFL"</span>);
+
+<span class="c-cm">// 3. Teraz próba czytania nie zatrzyma programu:</span>
+<span class="c-kw">char</span> c;
+<span class="c-kw">ssize_t</span> res = <span class="c-fn">read</span>(STDIN_FILENO, &amp;c, <span class="c-nu">1</span>);
+<span class="c-kw">if</span> (res == -<span class="c-nu">1</span>) {
+    <span class="c-kw">if</span> (errno == <span class="c-fl">EAGAIN</span> || errno == <span class="c-fl">EWOULDBLOCK</span>) {
+        <span class="c-fn">printf</span>(<span class="c-st">"Użytkownik nic nie nacisnął, program robi swoje dalej!\n"</span>);
+    } <span class="c-kw">else</span> {
+        ERR(<span class="c-st">"read"</span>);
+    }
+} <span class="c-kw">else if</span> (res &gt; <span class="c-nu">0</span>) {
+    <span class="c-fn">printf</span>(<span class="c-st">"Wczytano znak: %c\n"</span>, c);
+}</code></pre>
+      </section>
+
+      <!-- 11. Multipleksowanie IO -->
+      <section id="sec-multiplex">
+        <h2><span class="num">11.</span> Multipleksowanie I/O: Odwieczny Problem i Rozwiązanie</h2>
+        <p>
+          Wyobraź sobie, że Twój program musi równocześnie nasłuchiwać <strong>dwóch lub więcej źródeł danych</strong>: np. klawiatury (<code>stdin</code>) oraz połączenia sieciowego (<code>socket</code>) lub potoku (<code>pipe</code>).
+        </p>
+
+        <h3>Dwa złe podejścia (Pułapka):</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Podejście</th>
+              <th>Jak działa?</th>
+              <th>Dlaczego odpada na laboratoriach?</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1. Tryb blokujący</strong></td>
+              <td>Wołasz <code>read(stdin)</code>, a potem <code>read(socket)</code>.</td>
+              <td>
+                ❌ <strong>Paraliż!</strong> Program wisi na <code>stdin</code>. Jeśli z sieci przyjdą dane, program ich NIE zobaczy, dopóki użytkownik nie naciśnie Enter!
+              </td>
+            </tr>
+            <tr>
+              <td><strong>2. Tryb nieblokujący + Busy Waiting</strong></td>
+              <td>Pętla <code>while(1)</code> bez przerwy sprawdza: „są dane na stdin? a na socket?”.</td>
+              <td>
+                ❌ <strong>100% obciążenia procesora!</strong> Wentylatory wyją, CPU się pali. Na SOP za tzw. <em>busy waiting</em> (aktywne czekanie) <u>stawiane jest 0 punktów</u>! Dodanie <code>sleep()</code> z kolei powoduje lagi.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout success">
+          <div class="callout-title">💡 Rozwiązanie: Multipleksowanie I/O (IO Multiplexing)</div>
+          Zamiast samemu w kółko pytać, <strong>przekazujemy listę naszych deskryptorów jądru systemu operacyjnego</strong> i mówimy:
+          <blockquote style="margin: 0.5rem 0; font-style: italic; color: #cbd5e1;">
+            „Oto 5 moich deskryptorów. Ja idę spać (0% zużycia CPU). Obudź mnie dokładnie w tej mikrosekundzie, w której na KTÓRYMKOLWIEK z nich pojawią się dane do czytania!”
+          </blockquote>
+        </div>
+
+        <h3>Narzędzia Multipleksowania w POSIX i Linux:</h3>
+        <div class="cards-grid">
+          <div class="card">
+            <div class="card-title">
+              <span>select()</span>
+              <span class="card-flag-badge">POSIX (Stary)</span>
+            </div>
+            <p>Pierwszy historyczny mechanizm. Ma sztywny limit do 1024 deskryptorów i niewygodne makra bitowe (<code>FD_SET</code>). Dziś rzadko zalecany.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>poll()</span>
+              <span class="card-flag-badge">POSIX • GWIAZDA LABÓW!</span>
+            </div>
+            <p><strong>Główny mechanizm na SOP1!</strong> Brak sztucznych limitów, prosta i elegancka tablica struktur <code>struct pollfd</code>. Działa na każdym uniksowym systemie.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>epoll()</span>
+              <span class="card-flag-badge">Tylko Linux</span>
+            </div>
+            <p>Ultra-wydajne rozszerzenie jądra Linux dla serwerów obsługujących dziesiątki tysięcy połączeń (C10K problem). Złożone API, niewymagane na labach.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 12. poll() w Praktyce: /dev/input -->
+      <section id="sec-pollexample">
+        <h2><span class="num">12.</span> Praktyka Laboratoryjna: poll() i Przechwytywanie Zdarzeń (/dev/input)</h2>
+        <p>
+          Poniższy kod to podręcznikowy przykład użycia <code>poll()</code> do jednoczesnego nasłuchiwania <strong>wszystkich urządzeń wejściowych w systemie Linux</strong> (klawiatury, myszki, touchpada, przycisków zasilania).
+        </p>
+
+        <h3>Anatomia struktury struct pollfd</h3>
+        <pre><code><span class="c-kw">struct</span> pollfd {
+    <span class="c-kw">int</span>   fd;       <span class="c-cm">/* Deskryptor pliku/urządzenia */</span>
+    <span class="c-kw">short</span> events;   <span class="c-cm">/* O jakie zdarzenia pytamy jądro (np. POLLIN - gotowość do czytania) */</span>
+    <span class="c-kw">short</span> revents;  <span class="c-cm">/* Zdarzenia ZWRÓCONE przez jądro po obudzeniu */</span>
+};</code></pre>
+
+        <h3>Kluczowe mechanizmy w tym programie:</h3>
+        <div class="cards-grid">
+          <div class="card">
+            <div class="card-title">
+              <span>1. Skanowanie /dev/input</span>
+              <span class="card-flag-badge">opendir / readdir</span>
+            </div>
+            <p>Funkcja <code>get_descriptors()</code> otwiera katalog <code>/dev/input</code> i szuka wszystkich plików o nazwach <code>event0</code>, <code>event1</code>... Każdy z nich reprezentuje fizyczny kontroler.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>2. Konfiguracja pollfd</span>
+              <span class="card-flag-badge">POLLIN</span>
+            </div>
+            <p>Dla każdego otwartego urządzenia ustawiamy: <code>fds[n].events = POLLIN;</code> (obudź, gdy użytkownik coś wciśnie/poruszy) oraz <code>revents = 0;</code>.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>3. Odłączenie urządzenia</span>
+              <span class="card-flag-badge">fds[i].fd = -1</span>
+            </div>
+            <p>Jeśli urządzenie zostanie odłączone (wyjęte USB), jądro zwraca flagę <code>POLLHUP</code>. <strong>Trik POSIX:</strong> ustawienie <code>fds[i].fd = -1</code> sprawia, że <code>poll()</code> automatycznie ignoruje ten wpis w przyszłości!</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>4. Odczyt struct input_event</span>
+              <span class="card-flag-badge">O_NONBLOCK + read</span>
+            </div>
+            <p>Urządzenia są otwarte z <code>O_NONBLOCK</code>. Po obudzeniu przez <code>POLLIN</code> pętla <code>while(read(...) == sizeof(ev))</code> wysysa wszystkie zdarzenia z bufora do zera bez ryzyka zawieszenia.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 13. Łącza Nazwane (FIFO) -->
+      <section id="sec-fifo">
+        <h2><span class="num">13.</span> Łącza Nazwane (FIFO / Named Pipes): Idealny Poligon dla poll()</h2>
+        <p>
+          Łącze nazwane (FIFO) to <strong>wirtualna rura w pamięci RAM</strong>, która w systemie plików udaje zwykły plik. Służy do komunikacji między procesami (IPC).
+        </p>
+
+        <div class="cards-grid">
+          <div class="card">
+            <div class="card-title">
+              <span>Dlaczego FIFO?</span>
+              <span class="card-flag-badge">First-In First-Out</span>
+            </div>
+            <p>
+              Dane wysłane jako pierwsze są odczytywane jako pierwsze. <strong>Kluczowa cecha:</strong> odczytanie danych z FIFO natychmiast je bezpowrotnie <strong>kasuje</strong> (dane nie zostają na dysku).
+            </p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>Brak uprawnień roota!</span>
+              <span class="card-flag-badge">Zwykły użytkownik</span>
+            </div>
+            <p>
+              W przeciwieństwie do <code>/dev/input</code> (które wymaga <code>sudo</code>), plik FIFO możesz utworzyć w swoim katalogu domowym i testować <code>poll()</code> bez żadnych ograniczeń.
+            </p>
+          </div>
+        </div>
+
+        <h3>Testowanie w terminalu (Krok po kroku):</h3>
+        <pre><code><span class="c-cm"># Terminal 1: Tworzymy FIFO i czekamy na dane</span>
+mkfifo moj_fifo
+cat moj_fifo       <span class="c-cm"># Program zawisa i czeka, aż ktoś coś napisze!</span>
+
+<span class="c-cm"># Terminal 2: Wrzucamy wiadomość do rury</span>
+echo "Czesc z drugiego terminala!" &gt; moj_fifo
+
+<span class="c-cm"># W Terminalu 1 tekst natychmiast się pojawi, a cat zakończy działanie.</span>
+rm moj_fifo        <span class="c-cm"># Sprzątanie</span></code></pre>
+
+        <h3>Użycie w języku C:</h3>
+        <pre><code><span class="c-kw">#include</span> <span class="c-st">&lt;sys/stat.h&gt;</span>
+<span class="c-kw">#include</span> <span class="c-st">&lt;fcntl.h&gt;</span>
+<span class="c-kw">#include</span> <span class="c-st">&lt;unistd.h&gt;</span>
+
+<span class="c-cm">// 1. Tworzenie łącza (analogicznie do mkdir):</span>
+<span class="c-kw">if</span> (<span class="c-fn">mkfifo</span>(<span class="c-st">"moj_pipe"</span>, <span class="c-nu">0666</span>) == -<span class="c-nu">1</span> &amp;&amp; errno != <span class="c-fl">EEXIST</span>)
+    ERR(<span class="c-st">"mkfifo"</span>);
+
+<span class="c-cm">// 2. Otwieranie (zwykły open!):</span>
+<span class="c-kw">int</span> fd = <span class="c-fn">open</span>(<span class="c-st">"moj_pipe"</span>, <span class="c-fl">O_RDONLY</span> | <span class="c-fl">O_NONBLOCK</span>);
+
+<span class="c-cm">// 3. Możemy teraz wrzucić fd do poll() i czekać na POLLIN!</span>
+<span class="c-cm">// 4. Na koniec usuwamy plik ze ścieżki:</span>
+<span class="c-fn">close</span>(fd);
+<span class="c-fn">unlink</span>(<span class="c-st">"moj_pipe"</span>);</code></pre>
+      </section>
+
+      <!-- 14. Jak wypełniać pollfd i odczytywać dane -->
+      <section id="sec-pollpattern">
+        <h2><span class="num">14.</span> Wzorzec: Jak Wypełniać pollfd i Odczytywać z Właściwego Źródła</h2>
+        <p>
+          Oto uniwersalny, kompletny szablon laboratoryjny, który pokazuje krok po kroku: jak poprawnie skonfigurować tablicę <code>struct pollfd</code>, jak wywołać <code>poll()</code> oraz jak rozpoznać, <strong>z którego dokładnie deskryptora (klawiatury czy rury) nadeszły dane</strong>.
+        </p>
+
+        <h3>Sygnatura i parametry funkcji poll()</h3>
+        <div class="callout warning">
+          <div class="callout-title">⚠️ Wymagany nagłówek i makro POSIX</div>
+          Aby użyć <code>poll()</code> oraz struktury <code>struct pollfd</code>, na samym początku pliku <strong>musisz</strong> dołączyć:
+          <pre style="margin: 0.5rem 0 0.25rem 0;"><code>#define _POSIX_C_SOURCE 200809L
+#include &lt;poll.h&gt;</code></pre>
+          Brak tego nagłówka skutkuje błędem kompilacji: <em>„error: array type has incomplete element type ‘struct pollfd’”</em> (kompilator nie zna rozmiaru ani pól struktury).
+        </div>
+        <pre><code><span class="c-kw">int</span> <span class="c-fn">poll</span>(<span class="c-kw">struct</span> pollfd fds[], <span class="c-kw">nfds_t</span> nfds, <span class="c-kw">int</span> timeout);</code></pre>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Argument</th>
+              <th>Typ</th>
+              <th>Znaczenie i wartości</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>fds[]</code></td>
+              <td><code>struct pollfd</code></td>
+              <td>Tablica struktur opisująca deskryptory do monitorowania oraz oczekiwane zdarzenia.</td>
+            </tr>
+            <tr>
+              <td><code>nfds</code></td>
+              <td><code>nfds_t</code> (unsigned)</td>
+              <td>Liczba elementów w tablicy <code>fds</code> (np. <code>2</code>).</td>
+            </tr>
+            <tr>
+              <td><code>timeout</code></td>
+              <td><code>int</code></td>
+              <td>
+                Czas oczekiwania w <strong>milisekundach (ms)</strong>:<br>
+                • <code>-1</code>: <strong>Czekaj w nieskończoność</strong> (blokuj aż do wystąpienia zdarzenia).<br>
+                • <code>0</code>: <strong>Sprawdź natychmiast</strong> i wróć (nie blokuj wcale).<br>
+                • <code>&gt; 0</code>: Czekaj maksymalnie tyle ms (np. <code>5000</code> = 5 sekund).
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout success">
+          <div class="callout-title">Co zwraca funkcja poll()?</div>
+          <ul style="margin-bottom: 0;">
+            <li><code>&gt; 0</code>: <strong>Sukces</strong> — liczba deskryptorów, na których faktycznie zaszło zdarzenie (są gotowe do I/O).</li>
+            <li><code>0</code>: <strong>Upłynął timeout</strong> — minął wyznaczony czas i nic się nie wydarzyło.</li>
+            <li><code>-1</code>: <strong>Błąd</strong> — wywołanie nie powiodło się (np. przerwane przez sygnał <code>EINTR</code>), szczegóły w <code>errno</code>.</li>
+          </ul>
+        </div>
+
+        <h3>1. Trzy pola struktury struct pollfd</h3>
+        <pre><code><span class="c-kw">struct</span> pollfd fds[<span class="c-nu">2</span>];
+
+<span class="c-cm">// ŹRÓDŁO 0: Klawiatura (standardowe wejście)</span>
+fds[<span class="c-nu">0</span>].fd = <span class="c-fl">STDIN_FILENO</span>;  <span class="c-cm">// 1. Który deskryptor? (0)</span>
+fds[<span class="c-nu">0</span>].events = <span class="c-fl">POLLIN</span>;     <span class="c-cm">// 2. Na co czekamy? (Dane do czytania)</span>
+fds[<span class="c-nu">0</span>].revents = <span class="c-nu">0</span>;         <span class="c-cm">// 3. Wynik zerujemy przed wywołaniem</span>
+
+<span class="c-cm">// ŹRÓDŁO 1: Rura FIFO (otwarta z O_NONBLOCK)</span>
+fds[<span class="c-nu">1</span>].fd = fifo_fd;       <span class="c-cm">// 1. Deskryptor z open("moj_pipe", ...)</span>
+fds[<span class="c-nu">1</span>].events = <span class="c-fl">POLLIN</span>;     <span class="c-cm">// 2. Czekamy na dane z drugiego procesu</span>
+fds[<span class="c-nu">1</span>].revents = <span class="c-nu">0</span>;         <span class="c-cm">// 3. Wynik zerujemy</span></code></pre>
+
+        <h3>2. Jak sprawdzić, SKĄD przyszły dane po obudzeniu poll()?</h3>
+        <p>
+          Po powrocie z <code>poll()</code> sprawdzamy pole <strong><code>revents</code></strong> każdego indeksu za pomocą bitowego <strong>AND (<code>&amp;</code>)</strong>:
+        </p>
+
+        <div class="cards-grid">
+          <div class="card">
+            <div class="card-title">
+              <span>fds[0]: Klawiatura</span>
+              <span class="card-flag-badge">fds[0].revents &amp; POLLIN</span>
+            </div>
+            <p>
+              Jeśli ten warunek jest prawdziwy, użytkownik nacisnął klawisz i Enter w terminalu. Czytamy z <code>STDIN_FILENO</code>.
+            </p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>fds[1]: Rura FIFO</span>
+              <span class="card-flag-badge">fds[1].revents &amp; POLLIN</span>
+            </div>
+            <p>
+              Jeśli ten warunek jest prawdziwy, ktoś w innym terminalu wpisał coś do rury. Czytamy z <code>fifo_fd</code>.
+            </p>
+          </div>
+        </div>
+
+        <h3>3. Pełny, gotowy szablon pętli w języku C:</h3>
+        <pre><code><span class="c-kw">#define</span> BUF_SIZE <span class="c-nu">256</span>
+<span class="c-kw">char</span> buf[BUF_SIZE];
+
+<span class="c-kw">while</span> (<span class="c-nu">1</span>) {
+    <span class="c-cm">// Czekamy na dane z klawiatury LUB rury (timeout 5000 ms = 5 sekund):</span>
+    <span class="c-kw">int</span> ret = <span class="c-fn">poll</span>(fds, <span class="c-nu">2</span>, <span class="c-nu">5000</span>);
+
+    <span class="c-kw">if</span> (ret == -<span class="c-nu">1</span>) {
+        ERR(<span class="c-st">"poll"</span>);
+    }
+
+    <span class="c-kw">if</span> (ret == <span class="c-nu">0</span>) {
+        <span class="c-fn">printf</span>(<span class="c-st">"[IDLE] Minelo 5 sekund bez zadnych danych...\n"</span>);
+        <span class="c-kw">continue</span>;
+    }
+
+    <span class="c-cm">// --- SPRAWDZAMY ŹRÓDŁO 0: KLAWIATURA (stdin) ---</span>
+    <span class="c-kw">if</span> (fds[<span class="c-nu">0</span>].revents &amp; <span class="c-fl">POLLIN</span>) {
+        <span class="c-kw">ssize_t</span> bytes = <span class="c-fn">read</span>(STDIN_FILENO, buf, BUF_SIZE - <span class="c-nu">1</span>);
+        <span class="c-kw">if</span> (bytes &gt; <span class="c-nu">0</span>) {
+            buf[bytes] = <span class="c-st">'\0'</span>; <span class="c-cm">// Robimy poprawny string</span>
+            <span class="c-fn">printf</span>(<span class="c-st">"Otrzymano z KLAWIATURY: %s"</span>, buf);
+
+            <span class="c-kw">if</span> (<span class="c-fn">strcmp</span>(buf, <span class="c-st">"quit\n"</span>) == <span class="c-nu">0</span>) {
+                <span class="c-fn">printf</span>(<span class="c-st">"Koniec programu!\n"</span>);
+                <span class="c-kw">break</span>;
+            }
+        }
+    }
+
+    <span class="c-cm">// --- SPRAWDZAMY ŹRÓDŁO 1: RURA (FIFO) ---</span>
+    <span class="c-kw">if</span> (fds[<span class="c-nu">1</span>].revents &amp; <span class="c-fl">POLLIN</span>) {
+        <span class="c-kw">ssize_t</span> bytes;
+        <span class="c-cm">// Pętla wyczyści wszystkie zakolejkowane wiadomości:</span>
+        <span class="c-kw">while</span> ((bytes = <span class="c-fn">read</span>(fds[<span class="c-nu">1</span>].fd, buf, BUF_SIZE - <span class="c-nu">1</span>)) &gt; <span class="c-nu">0</span>) {
+            buf[bytes] = <span class="c-st">'\0'</span>;
+            <span class="c-fn">printf</span>(<span class="c-st">"Otrzymano z RURY (FIFO): %s"</span>, buf);
+        }
+    }
+
+    <span class="c-cm">// --- OBSŁUGA ROZŁĄCZENIA KLIENTA RURY (POLLHUP) ---</span>
+    <span class="c-kw">if</span> (fds[<span class="c-nu">1</span>].revents &amp; <span class="c-fl">POLLHUP</span>) {
+        <span class="c-cm">// Klient zamknął swój koniec rury. Przeotwieramy, by czekać na kolejnego:</span>
+        <span class="c-fn">close</span>(fds[<span class="c-nu">1</span>].fd);
+        fds[<span class="c-nu">1</span>].fd = <span class="c-fn">open</span>(<span class="c-st">"moj_pipe"</span>, <span class="c-fl">O_RDONLY</span> | <span class="c-fl">O_NONBLOCK</span>);
+    }
+}</code></pre>
+      </section>
+
+    </main>
+
+    <footer>
+      Konspekt SOP1 • Laboratorium 2: Operacje niskopoziomowe • Politechnika Warszawska (MiNI)
+    </footer>
+  </div>
+
+</body>
+</html>
