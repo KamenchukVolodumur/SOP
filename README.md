@@ -12,6 +12,7 @@ Kompletny przewodnik: deskryptory plików, wywołania systemowe open, read, writ
 
 ## 📑 Spis Treści
 
+- [00. Gotowy Pakiet Nagłówków i Makr dla L2 (Kopiuj-Wklej)](#00-gotowy-pakiet-nagłówków-i-makr-dla-l2-kopiuj-wklej)
 - [01. Operacje Niskopoziomowe vs Wysokopoziomowe](#01-operacje-niskopoziomowe-vs-wysokopoziomowe)
 - [02. Funkcja open() i Przewodnik po Flagach](#02-funkcja-open-i-przewodnik-po-flagach)
 - [03. Praktyczne Scenariusze Użycia open() w C](#03-praktyczne-scenariusze-użycia-open-w-c)
@@ -26,6 +27,64 @@ Kompletny przewodnik: deskryptory plików, wywołania systemowe open, read, writ
 - [12. Praktyka Laboratoryjna: poll() i Przechwytywanie Zdarzeń (/dev/input)](#12-praktyka-laboratoryjna-poll-i-przechwytywanie-zdarzeń-devinput)
 - [13. Łącza Nazwane (FIFO / Named Pipes): Idealny Poligon dla poll()](#13-łącza-nazwane-fifo-named-pipes-idealny-poligon-dla-poll)
 - [14. Wzorzec: Jak Wypełniać pollfd i Odczytywać z Właściwego Źródła](#14-wzorzec-jak-wypełniać-pollfd-i-odczytywać-z-właściwego-źródła)
+
+---
+
+## 00. Gotowy Pakiet Nagłówków i Makr dla L2 (Kopiuj-Wklej)
+
+Poniższy blok zawiera wszystkie nagłówki, flagi kompilacji i makra wymagane na **Laboratorium 2 (Niskopoziomowe I/O, mmap, FIFO, writev, poll)**. Wklejasz go na początek programu, a niepotrzebne linie po prostu usuwasz:
+
+```c
+#define _GNU_SOURCE
+#define _POSIX_C_SOURCE 200809L
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+
+/* Metadane plików, rozmiar fstat() oraz łącza nazwane mkfifo() */
+#include <sys/types.h>
+#include <sys/stat.h>
+
+/* Wektorowe I/O: writev(), readv(), struct iovec */
+#include <sys/uio.h>
+
+/* Pamięć wirtualna i mapowanie plików: mmap(), munmap(), msync() */
+#include <sys/mman.h>
+
+/* Multipleksowanie wejścia/wyjścia: poll(), struct pollfd, POLLIN, POLLHUP */
+#include <poll.h>
+
+/* Standardowe makro obsługi błędów systemowych (errno) */
+#define ERR(source) (perror(source), fprintf(stderr, "%s:%d\n", __FILE__, __LINE__), exit(EXIT_FAILURE))
+
+/* Funkcja informująca o błędnych argumentach CLI */
+void usage(const char *pname) {
+    fprintf(stderr, "USAGE: %s <argumenty>\n", pname);
+    exit(EXIT_FAILURE);
+}
+
+/* Pomocnicze stałe */
+#ifndef BUF_SIZE
+#define BUF_SIZE 1024
+#endif
+#ifndef MAX_PATH
+#define MAX_PATH 1024
+#endif
+```
+
+> [!TIP]
+> **Co daje który nagłówek w L2?**
+> - `<fcntl.h>` — funkcje `open()`, `fcntl()`, flagi `O_RDONLY`, `O_WRONLY`, `O_CREAT`, `O_TRUNC`, `O_APPEND`, `O_NONBLOCK`.
+> - `<unistd.h>` — niskopoziomowe `read()`, `write()`, `close()`, `lseek()`, `unlink()`.
+> - `<poll.h>` — funkcja `poll()`, struktura `struct pollfd` oraz flagi zdarzeń `POLLIN`, `POLLHUP`.
+> - `<sys/uio.h>` — wektorowy zapis/odczyt `writev()`, `readv()` i struktura `struct iovec`.
+> - `<sys/mman.h>` — rzutowanie plików w pamięć `mmap()`, zrzut na dysk `msync()` oraz zwalnianie `munmap()`.
+> - `<sys/stat.h>` — pobieranie rozmiaru pliku przez `fstat()` oraz tworzenie rur `mkfifo()`.
 
    
 

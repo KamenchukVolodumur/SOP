@@ -50,8 +50,14 @@ Poniższy blok zawiera wszystkie nagłówki i makra wymagane na Laboratorium 1. 
 /* Rekurencyjne przeszukiwanie drzewa katalogów */
 #include <ftw.h>
 
-/* Standardowe makro obsługi błędów stosowane na MiNI PW */
+/* Standardowe makro obsługi błędów systemowych (errno) */
 #define ERR(source) (perror(source), fprintf(stderr, "%s:%d\n", __FILE__, __LINE__), exit(EXIT_FAILURE))
+
+/* Funkcja usage informująca o poprawnym wywołaniu programu */
+void usage(const char *pname) {
+    fprintf(stderr, "USAGE: %s -n Name -p OCTAL -s SIZE\n", pname);
+    exit(EXIT_FAILURE);
+}
 
 /* Opcjonalne pomocnicze stałe */
 #ifndef PATH_MAX
