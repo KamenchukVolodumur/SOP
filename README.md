@@ -480,9 +480,7 @@ ssize_t writev(int fildes, const struct iovec *iov, int iovcnt);
 
  
 
-### Przykład w języku C (Zapis nagłówka i treści wiadomości):
-
- 
+### Przykład 1: Zapis wektorowy za pomocą writev() (Gathering)
 
 ```c
 #include <sys/uio.h>
@@ -508,6 +506,64 @@ if (written == -1) {
     ERR("writev");
 }
 ```
+
+### Przykład 2: Odczyt wektorowy za pomocą readv() (Scattering)
+
+`readv()` z jednego źródła (`fd`) zczytuje ciąg bajtów i **automatycznie rozrzuca je do osobnych zmiennych/struktur w pamięci**. Najczęstsze zastosowanie to odczyt nagłówka o stałym rozmiarze oraz treści wiadomości bez używania `memcpy`:
+
+```c
+#include <sys/uio.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <string.h>
+
+// 1. Definiujemy strukturę nagłówka (np. 8 bajtów):
+struct message_header {
+    int id;          // 4 bajty
+    int data_len;    // 4 bajty
+};
+
+struct message_header hdr;
+char body[256];
+
+// 2. Zerujemy bufory (readv nie dodaje '\0'!):
+memset(&hdr, 0, sizeof(hdr));
+memset(body, 0, sizeof(body));
+
+// 3. Konfigurujemy tablicę iovec:
+struct iovec iov[2];
+
+// Pierwszy pojemnik: dokładnie tyle bajtów, ile zajmuje nagłówek
+iov[0].iov_base = &hdr;
+iov[0].iov_len = sizeof(struct message_header);
+
+// Drugi pojemnik: bufor na treść (zostawiamy 1 bajt na '\0')
+iov[1].iov_base = body;
+iov[1].iov_len = sizeof(body) - 1;
+
+// 4. Jedno wywołanie systemowe napełnia oba bufory po kolei:
+ssize_t total_read = readv(fd, iov, 2);
+
+if (total_read == -1) {
+    ERR("readv");
+} else if (total_read == 0) {
+    printf("Koniec pliku (EOF) lub zamknięty potok!\n");
+} else {
+    // Jeśli wczytano więcej niż rozmiar nagłówka, to w body są dane:
+    if ((size_t)total_read > sizeof(hdr)) {
+        size_t body_bytes = total_read - sizeof(hdr);
+        body[body_bytes] = '\0'; // Zabezpieczenie napisu
+        printf("Odebrano pakiet ID=%d, długość=%d, treść: %s\n", hdr.id, hdr.data_len, body);
+    } else {
+        printf("Odebrano tylko część nagłówka (%zd bajtów)!\n", total_read);
+    }
+}
+```
+
+> [!WARNING]
+> **Pułapki przy `readv()`:**
+> 1. **Brak `\0`:** `readv()` odczytuje surowe bajty. Zawsze pamiętaj o dodaniu null-terminatora, jeśli traktujesz bufor jako string.
+> 2. **Częściowy odczyt (Partial read):** Jeśli plik lub potok ma mniej bajtów niż suma wszystkich `iov_len`, `readv()` zapełni bufory tylko częściowo i zwróci faktyczną liczbę odczytanych bajtów.
 
     
 
