@@ -1,5 +1,9 @@
 # Operacje niskopoziomowe na plikach (I/O w POSIX)
 
+> 📚 **Wybierz laboratorium:**  
+> 👉 [**Laboratorium 1: System plików, dirent, stat, nftw, getopt**](L1_system_files.md)  
+> 👉 **Laboratorium 2: Niskopoziomowe I/O, mmap, FIFO, poll** *(bieżący dokument)*
+
 > [!NOTE]
 > **Przedmiot:** Systemy Operacyjne 1 (SOP1) • Politechnika Warszawska (Wydział MiNI)
 > **Zakres:** Laboratorium 2 • Niskopoziomowe I/O, `mmap`, `FIFO`, `poll`
