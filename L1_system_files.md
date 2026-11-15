@@ -130,9 +130,57 @@ if (name == NULL || perms == (mode_t)-1 || size == -1) {
 }
 ```
 
+### Jak dokładnie działa `strtol()`?
+
+```c
+#include <stdlib.h>
+#include <errno.h>
+
+long strtol(const char *str, char **endptr, int base);
+```
+- **`str`** — napis wejściowy do zamiany na liczbę.
+- **`endptr`** — wskaźnik, do którego `strtol` wpisze **adres pierwszego znaku, na którym się zatrzymał** (pierwszego znaku niebędącego cyfrą w danej bazie). Jeśli nie potrzebujesz sprawdzania błędów, podaj `NULL`.
+- **`base`** — system liczbowy:
+  - `10` — dziesiętny (rozmiary, liczniki),
+  - `8` — **ósemkowy** (prawa dostępu: zarówno `"0644"`, jak i `"644"`!),
+  - `16` — szesnastkowy,
+  - `0` — automatyczny (`0x...` → hex, `0...` → ósemkowy, reszta → dziesiętny).
+
+#### Co zwraca `strtol(s, &end, 10)` w różnych przypadkach?
+
+| Napis `s` | Zwrócone `val` | Na co wskazuje `end`? | Interpretacja |
+| :--- | :--- | :--- | :--- |
+| `"25"` | `25` | `'\0'` (koniec napisu) | ✅ Poprawna liczba (`*end == '\0'`) |
+| `"07:Preheat"` | `7` | `':'` | ✅ Zatrzymał się dokładnie na separatorze |
+| `"12abc"` | `12` | `'a'` | ❌ Śmieci za liczbą (`*end != '\0'`) |
+| `"abc"` lub `""` | `0` | `s` (początek napisu) | ❌ Brak jakichkolwiek cyfr (`end == s`) |
+| `"99999999999999999999"` | `LONG_MAX` | `'\0'` | ❌ Przepełnienie (`errno == ERANGE`) |
+
+#### Wzorzec pełnej, kuloodpornej walidacji liczby:
+```c
+errno = 0;
+char *end = NULL;
+long val = strtol(optarg, &end, 10);
+
+if (errno == ERANGE || end == optarg || *end != '\0') {
+    fprintf(stderr, "Błąd: '%s' nie jest poprawną liczbą!\n", optarg);
+    exit(EXIT_FAILURE);
+}
+```
+
+> [!TIP]
+> **Odwrotnie (liczba → napis):** W Linux/POSIX **nie istnieje funkcja `itoa()`**! Do zamiany liczby na napis zawsze używaj `snprintf()`:
+> ```c
+> char buf[32];
+> snprintf(buf, sizeof(buf), "%04o", 0644); // -> "0644"
+> ```
+
 > [!WARNING]
-> **Nigdy nie używaj `atoi()` na kolokwium!**  
-> `atoi("abc")` cicho zwróci `0` i nie poinformuje o błędzie. Wykładowcy wymagają `strtol()` z weryfikacją wskaźnika `end`.
+> **Dlaczego na SOP1 nie wolno używać `atoi()`?**
+> 1. `atoi("abc")` po cichu zwraca `0` — nie odróżnisz zera od błędnego napisu.
+> 2. `atoi("12abc")` zwraca `12` — ignoruje śmieci na końcu.
+> 3. Przepełnienie w `atoi()` to **Undefined Behavior** (zamiast `errno = ERANGE`).
+> 4. `atoi("0644")` czyta liczbę jako **dziesiętne 644**, co całkowicie psuje bity uprawnień!
 
 ---
 
