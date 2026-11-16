@@ -234,7 +234,11 @@ void makeFile(const char *name, size_t size, mode_t perms, int percent) {
 
 ### 1. Sztuczka z umask: `umask(~perms & 0777)`
 Funkcja `umask(mask)` maskuje (odbiera) bity uprawnień przy tworzeniu plików:
-$$\text{Rzeczywiste uprawnienia} = \text{perms} \ \& \ (\sim\text{mask})$$
+
+```c
+rzeczywiste_uprawnienia = perms & (~mask)
+```
+
 Dlatego, jeśli chcemy narzucić dokładne uprawnienia `perms`, ustawiamy:
 ```c
 umask(~perms & 0777);
