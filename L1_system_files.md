@@ -401,6 +401,15 @@ if (closedir(dirp) != 0)
     ERR("closedir");
 ```
 
+> [!TIP]
+> **Alternatywa bez `snprintf`: `dirfd()` + `fstatat()`**  
+> Zamiast sklejać pełną ścieżkę `fullpath`, możesz wyciągnąć deskryptor z `DIR *` funkcją **`dirfd(dirp)`** (z `<dirent.h>`) i użyć `fstatat()`:
+> ```c
+> if (fstatat(dirfd(dirp), dp->d_name, &filestat, AT_SYMLINK_NOFOLLOW) != 0)
+>     ERR("fstatat");
+> ```
+> Flaga `AT_SYMLINK_NOFOLLOW` działa jak `lstat()`, a `0` — jak `stat()`. `closedir(dirp)` zamyka też ten deskryptor (nie zamykaj go ręcznie przez `close()`!).
+
 ---
 
 ## 08. Rekurencyjne Przechodzenie Drzewa Katalogów (nftw)

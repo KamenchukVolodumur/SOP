@@ -416,6 +416,28 @@ Funkcje z końcówką `-at` rozwiązują 3 kluczowe problemy programisty systemo
 > Jeśli jako pierwszy parametr `dirfd` podasz `AT_FDCWD`, funkcja zinterpretuje ścieżkę względną od bieżącego katalogu roboczego (CWD).
 > Oznacza to, że: `openat(AT_FDCWD, "plik.txt", O_RDONLY)` zachowuje się **dokładnie tak samo** jak `open("plik.txt", O_RDONLY)`.
 
+### Jak połączyć `opendir()` z funkcjami `-at`: `dirfd()`
+
+Funkcja `opendir()` zwraca wskaźnik `DIR *`, natomiast `openat()` i `fstatat()` wymagają deskryptora `int`. Do konwersji służy **`dirfd()`** z `<dirent.h>`:
+
+```c
+#include <dirent.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+
+DIR *dirp = opendir("./katalog");
+if (!dirp) ERR("opendir");
+
+struct dirent *dp;
+struct stat st;
+while ((dp = readdir(dirp)) != NULL) {
+    // 4. argument fstatat: 0 (jak stat) lub AT_SYMLINK_NOFOLLOW (jak lstat)
+    if (fstatat(dirfd(dirp), dp->d_name, &st, AT_SYMLINK_NOFOLLOW) == -1)
+        ERR("fstatat");
+}
+closedir(dirp); // Automatycznie zamyka też wewnętrzny deskryptor!
+```
+
     
 
 ---
