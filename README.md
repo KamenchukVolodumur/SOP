@@ -1006,3 +1006,42 @@ while (1) {
     }
 }
 ```
+
+### 4. Złote zasady i pułapki czytania z FIFO przez `poll()`
+
+1. **Zawsze najpierw `POLLIN`, dopiero potem `POLLHUP`!**  
+   Jeśli pisarz wyśle ostatnie dane i natychmiast zamknie deskryptor, jądro ustawi **obie** flagi naraz (`POLLIN | POLLHUP`). Gdybyś najpierw obsłużył `POLLHUP` i zamknął `fd`, straciłbyś ostatnie bajty z rury!
+
+2. **Pusta rura (`EAGAIN`) vs zamknięta rura (`EOF` / `POLLHUP`):**
+   * **`read() == -1` i `errno == EAGAIN` (lub `EWOULDBLOCK`):** Rura jest chwilowo pusta, ale **pisarz nadal żyje**! **NIE zamykaj FIFO** — po prostu wyjdź z pętli `read()` i wróć do `poll()`. Jeśli to inna wartość `errno`, zgłoś `ERR("read")`.
+   * **`read() == 0` lub `POLLHUP`:** Ostatni pisarz zamknął swoją stronę rury. Jeśli nie zamkniesz `fd`, `POLLHUP` zostanie w `revents` na stałe i `poll()` będzie wracał natychmiast (100% CPU — *busy waiting*).  
+     * Jednorazowa rura (np. `sop-cake`): `close(fds[i].fd); fds[i].fd = -1;`  
+     * Serwer czekający na kolejnych klientów: `close(fds[i].fd); fds[i].fd = open(path, O_RDONLY | O_NONBLOCK);`
+
+3. **Jeden `read()` czy pętla `while (read(...) > 0)`?**  
+   `poll()` jest *level-triggered*: nawet jeśli zrobisz tylko **jeden** `read()` bez pętli `while`, a w rurze zostaną jeszcze jakieś bajty, to na następnym obrocie `poll()` natychmiast obudzi Cię ponownie (i unikniesz obsługi `EAGAIN`). Z kolei pętla `while` + sprawdzenie `EAGAIN` opróżnia rurę do zera za jednym podejściem.
+
+4. **Składanie wiadomości przychodzących w kawałkach (lub po kilka naraz):**  
+   FIFO to strumień bajtów, nie pakietów. Najprostszy, niezawodny wzorzec (bez `memchr`/`memmove`) dla wielu rur naraz to czytanie do małego bufora `tmp` i zbieranie znaków do własnego bufora danej rury aż do `'\n'`:
+
+```c
+char tmp[256];
+ssize_t r;
+while ((r = read(fds[i].fd, tmp, sizeof(tmp))) > 0) {
+    for (ssize_t k = 0; k < r; ++k) {
+        if (tmp[k] != '\n') {
+            if (lens[i] < MAX_MSG - 1)
+                bufs[i][lens[i]++] = tmp[k];
+            continue;
+        }
+        bufs[i][lens[i]] = '\0';
+        // ... przetwarzamy gotową linię bufs[i] ...
+        lens[i] = 0;
+    }
+}
+if (r == -1 && errno != EAGAIN && errno != EWOULDBLOCK)
+    ERR("read");
+```
+
+5. **Otwieranie FIFO w jednym procesie (Reader + Writer):**  
+   Jeśli w tym samym programie tworzysz FIFO, musisz **najpierw** otworzyć koniec do odczytu z `O_RDONLY | O_NONBLOCK` (przejdzie od razu), a **dopiero potem** koniec do zapisu `O_WRONLY`! Odwrotna kolejność spowoduje zawieszenie (deadlock) lub błąd `ENXIO`.
