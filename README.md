@@ -1021,26 +1021,34 @@ while (1) {
 3. **Jeden `read()` czy pętla `while (read(...) > 0)`?**  
    `poll()` jest *level-triggered*: nawet jeśli zrobisz tylko **jeden** `read()` bez pętli `while`, a w rurze zostaną jeszcze jakieś bajty, to na następnym obrocie `poll()` natychmiast obudzi Cię ponownie (i unikniesz obsługi `EAGAIN`). Z kolei pętla `while` + sprawdzenie `EAGAIN` opróżnia rurę do zera za jednym podejściem.
 
-4. **Składanie wiadomości przychodzących w kawałkach (lub po kilka naraz):**  
-   FIFO to strumień bajtów, nie pakietów. Najprostszy, niezawodny wzorzec (bez `memchr`/`memmove`) dla wielu rur naraz to czytanie do małego bufora `tmp` i zbieranie znaków do własnego bufora danej rury aż do `'\n'`:
+4. **Składanie wiadomości przychodzących w kawałkach (lub po kilka naraz) + obsługa `POLLHUP` / błędów:**  
+   FIFO to strumień bajtów, nie pakietów. Poniżej pełny, gotowy blok obsługi jednego deskryptora w pętli `poll()` (najpierw `POLLIN`, potem `POLLHUP | POLLERR | POLLNVAL`):
 
 ```c
-char tmp[256];
-ssize_t r;
-while ((r = read(fds[i].fd, tmp, sizeof(tmp))) > 0) {
-    for (ssize_t k = 0; k < r; ++k) {
-        if (tmp[k] != '\n') {
-            if (lens[i] < MAX_MSG - 1)
-                bufs[i][lens[i]++] = tmp[k];
-            continue;
+if (fds[i].revents & POLLIN) {
+    char tmp[256];
+    ssize_t r;
+    while ((r = read(fds[i].fd, tmp, sizeof(tmp))) > 0) {
+        for (ssize_t k = 0; k < r; ++k) {
+            if (tmp[k] != '\n') {
+                if (lens[i] < MAX_MSG - 1)
+                    bufs[i][lens[i]++] = tmp[k];
+                continue;
+            }
+            bufs[i][lens[i]] = '\0';
+            // ... przetwarzamy gotową linię bufs[i] ...
+            lens[i] = 0;
         }
-        bufs[i][lens[i]] = '\0';
-        // ... przetwarzamy gotową linię bufs[i] ...
-        lens[i] = 0;
     }
+    if (r == -1 && errno != EAGAIN && errno != EWOULDBLOCK)
+        ERR("read");
 }
-if (r == -1 && errno != EAGAIN && errno != EWOULDBLOCK)
-    ERR("read");
+
+if (fds[i].revents & (POLLHUP | POLLERR | POLLNVAL)) {
+    close(fds[i].fd);
+    fds[i].fd = -1; // lub open(path, O_RDONLY | O_NONBLOCK), jeśli czekasz na kolejnych klientów
+    active--;
+}
 ```
 
 5. **Otwieranie FIFO w jednym procesie (Reader + Writer):**  
