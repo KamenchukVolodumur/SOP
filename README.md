@@ -334,6 +334,55 @@ if (bytes_read == -1) {
 }
 ```
 
+### Wzorzec 2: Uniwersalna funkcja `write_all()` i zapis różnych typów danych
+
+Aby nie powtarzać pętli doza­pisu za każdym razem, warto wydzielić pomocniczą funkcję `write_all()`, odporną na częściowy zapis i sygnał `EINTR`:
+
+```c
+void write_all(int fd, const void *buf, size_t count) {
+    const char *ptr = buf;
+    size_t written = 0;
+    while (written < count) {
+        ssize_t res = write(fd, ptr + written, count - written);
+        if (res == -1) {
+            if (errno == EINTR) continue; // Przerwane przez sygnał -> ponów próbę
+            ERR("write");
+        }
+        written += (size_t)res;
+    }
+}
+```
+
+#### Jak przekazywać różne typy danych do `write_all()`?
+
+* **Zwykły tekst (`char *`):**
+  ```c
+  const char *text = "Hello!\n";
+  write_all(fd, text, strlen(text)); // BEZ +1, aby nie zapisać '\0' do pliku tekstowego!
+  ```
+* **Liczby lub sformatowany napis (`snprintf` + `write_all`):**
+  ```c
+  char buf[128];
+  int len = snprintf(buf, sizeof(buf), "Krok %02d zapisany\n", row);
+  write_all(fd, buf, len);
+  ```
+* **Zapis w konkretnym miejscu pliku (`lseek` + `write_all`):**
+  ```c
+  if (lseek(fd, row * 64, SEEK_SET) == -1) ERR("lseek");
+  write_all(fd, line, 63);
+  ```
+* **Binarne liczby lub struktury (`int`, `struct`):**
+  ```c
+  int val = 42;
+  write_all(fd, &val, sizeof(val));
+  ```
+
+> [!CAUTION]
+> **Najczęstsze błędy przy `write()`:**
+> 1. `write(fd, str, sizeof(str))` dla wskaźnika `char *str` — zapisze tylko **8 bajtów** (rozmiar wskaźnika), zamiast długości napisu! Dla tekstu używaj `strlen(str)`.
+> 2. `strlen(str) + 1` w pliku tekstowym — dopisze na końcu zbędny bajt `0x00` (`NUL`).
+> 3. Brak `O_TRUNC` przy nadpisywaniu — krótszy tekst zostawi za sobą stary ogon pliku.
+
     
 
 ---
