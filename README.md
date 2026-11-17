@@ -2,7 +2,8 @@
 
 > 📚 **Wybierz laboratorium:**  
 > 👉 [**Laboratorium 1: System plików, dirent, stat, nftw, getopt**](L1_system_files.md)  
-> 👉 **Laboratorium 2: Niskopoziomowe I/O, mmap, FIFO, poll** *(bieżący dokument)*
+> 👉 **Laboratorium 2: Niskopoziomowe I/O, mmap, FIFO, poll** *(bieżący dokument)*  
+> 👉 [**Przykładowe zadanie L2 (`sop-cake.c`, `Makefile`, `granny.sh`)**](TaskForLab2/)
 
 > [!NOTE]
 > **Przedmiot:** Systemy Operacyjne 1 (SOP1) • Politechnika Warszawska (Wydział MiNI)
