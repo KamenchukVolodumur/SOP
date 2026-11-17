@@ -21,6 +21,7 @@
 8. [Rekurencyjne Przechodzenie Drzewa Katalogów (nftw)](#08-rekurencyjne-przechodzenie-drzewa-katalogów-nftw)
 9. [Bezpieczne Operacje na Napisach i Wejściu (getline, snprintf, strdup, pułapki)](#09-bezpieczne-operacje-na-napisach-i-wejściu-getline-snprintf-strdup-pułapki)
 10. [Generator Liczb Losowych (srand, rand)](#10-generator-liczbl-losowych-srand-rand)
+11. [Zmienne Środowiskowe (getenv, setenv, unsetenv)](#11-zmienne-środowiskowe-getenv-setenv-unsetenv)
 
 ---
 
@@ -532,3 +533,49 @@ int r = min + (rand() % (max - min + 1));
 // 3. Losowy znak od 'A' do 'Z':
 char c = 'A' + (rand() % ('Z' - 'A' + 1));
 ```
+
+---
+
+## 11. Zmienne Środowiskowe (getenv, setenv, unsetenv)
+
+### 1. Przekazywanie z terminala (Bash / Zsh)
+* **Tylko na jedno uruchomienie programu** (najwygodniejsze do testów):
+  ```bash
+  MY_VAR="test" STEPS=10 ./program
+  ```
+* **Na całą sesję terminala (`export`):**
+  ```bash
+  export MY_VAR="test"
+  ./program
+  # Sprawdzenie: echo $MY_VAR | Usunięcie: unset MY_VAR
+  ```
+
+### 2. Odczyt w programie C (`getenv`)
+Wymaga `#include <stdlib.h>`:
+
+```c
+const char *val = getenv("MY_VAR");
+if (val == NULL) {
+    fprintf(stderr, "Brak zmiennej środowiskowej MY_VAR!\n");
+    return EXIT_FAILURE;
+}
+printf("MY_VAR = %s\n", val);
+```
+
+> [!WARNING]
+> **Zawsze sprawdzaj `val == NULL`!** Jeśli zmienna nie istnieje, `getenv()` zwraca `NULL` — podanie jej bezpośrednio do `strtol()` lub `printf("%s")` spowoduje `Segmentation fault`. Jeśli zmienna ma być liczbą, parsuj ją przez `strtol(val, &end, 10)`.
+
+### 3. Ustawianie i usuwanie w C (`setenv`, `unsetenv`)
+Wymaga `#define _POSIX_C_SOURCE 200809L` oraz `#include <stdlib.h>`:
+
+```c
+// 3. argument: 1 = nadpisz jeśli istnieje, 0 = nie zmieniaj jeśli istnieje
+if (setenv("MY_VAR", "nowa_wartosc", 1) == -1)
+    ERR("setenv");
+
+if (unsetenv("MY_VAR") == -1)
+    ERR("unsetenv");
+```
+
+> [!NOTE]
+> `setenv()` modyfikuje środowisko **wyłącznie dla bieżącego procesu oraz jego procesów potomnych** (`fork`/`exec`). Z poziomu programu w C nie da się zmienić zmiennych w terminalu rodzica.
